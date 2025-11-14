@@ -1,9 +1,6 @@
 # Qwen-Image Fast-API
 
-[![RunPod](https://api.runpod.io/badge/arkodeepsen/qwen-image)](https://console.runpod.io/hub/arkodeepsen/qwen-image)
-
-[![One-Click Pod Deployment](https://cdn.prod.website-files.com/67d20fb9f56ff2ec6a7a657d/685b44aed6fc50d169003af4_banner-runpod.webp)](https://console.runpod.io/deploy?template=wqf5o3topx&ref=az0kmnor)
-
+[![Runpod](https://api.runpod.io/badge/pqhaz3925/qwen-image)](https://console.runpod.io/hub/pqhaz3925/qwen-image)
 A production-ready RunPod serverless endpoint for Alibaba's Qwen-Image model - a powerful text-to-image generation model with superior text rendering capabilities in both English and Chinese.
 
 ## Features
@@ -36,7 +33,10 @@ A production-ready RunPod serverless endpoint for Alibaba's Qwen-Image model - a
     "height": 1024,
     "num_inference_steps": 50,
     "true_cfg_scale": 4.0,
-    "seed": null
+    "seed": null,
+    "scheduler": "euler",
+    "lora_url": "https://civitai.com/api/download/models/2316696?type=Model&format=SafeTensor",
+    "lora_scale": 1.0
   }
 }
 ```
@@ -52,6 +52,9 @@ A production-ready RunPod serverless endpoint for Alibaba's Qwen-Image model - a
 | `num_inference_steps` | integer | `50` | Number of denoising steps (higher = better quality, slower) |
 | `true_cfg_scale` | float | `4.0` | Classifier-free guidance scale |
 | `seed` | integer | `null` | Random seed for reproducibility (optional) |
+| `scheduler` | string | `null` | Sampler/scheduler to use: `euler`, `euler_a`, `dpm`, `ddim`, `pndm`, `lms`, `kdpm2`, `kdpm2_a` |
+| `lora_url` | string | `null` | URL to LoRA file (.safetensors) - downloaded and cached automatically |
+| `lora_scale` | float | `1.0` | LoRA weight strength (0.0 to 1.0, higher = more LoRA influence) |
 
 ### Output Format
 
@@ -80,7 +83,10 @@ request = {
         "width": 1024,
         "height": 1024,
         "num_inference_steps": 50,
-        "seed": 42
+        "seed": 42,
+        "scheduler": "euler",  # Optional: specify sampler
+        "lora_url": "https://civitai.com/api/download/models/2316696?type=Model&format=SafeTensor",  # Optional: LoRA URL
+        "lora_scale": 1.0      # Optional: adjust LoRA strength
     }
 }
 
@@ -105,7 +111,9 @@ curl -X POST https://api.runpod.ai/v2/YOUR_ENDPOINT_ID/runsync \
       "prompt": "A futuristic cityscape at sunset",
       "width": 1024,
       "height": 1024,
-      "num_inference_steps": 50
+      "num_inference_steps": 50,
+      "scheduler": "dpm",
+      "lora_scale": 0.8
     }
   }'
 ```
@@ -141,6 +149,53 @@ The network volume:
 - **Warm Inference**: ~20-40 seconds (depends on steps and resolution)
 - **Memory Usage**: ~50-60GB VRAM for 1024x1024 images (20B parameter model)
 
+## LoRA Support
+
+This endpoint supports **dynamic LoRA loading** - simply provide a `lora_url` in your request to download and use any compatible LoRA:
+
+- **Automatic Download**: LoRAs are downloaded from the provided URL on first use
+- **Persistent Caching**: Downloaded LoRAs are cached on the network volume and reused across all workers
+- **No Rebuilds Needed**: Change LoRAs without rebuilding the Docker container
+
+### Using LoRAs
+
+```json
+{
+  "input": {
+    "prompt": "your prompt here",
+    "lora_url": "https://civitai.com/api/download/models/2316696?type=Model&format=SafeTensor",
+    "lora_scale": 1.0
+  }
+}
+```
+
+### LoRA Scale Control
+
+- `lora_scale: 1.0` - Full LoRA strength (default)
+- `lora_scale: 0.5` - 50% LoRA influence (blend with base model)
+- `lora_scale: 0.0` - Base model only (disables LoRA)
+
+### Supported LoRA Sources
+
+- CivitAI direct download links
+- Hugging Face model files
+- Any direct URL to a `.safetensors` file
+
+## Scheduler/Sampler Options
+
+Choose different samplers to control the denoising process and image quality:
+
+- **`euler`** - Euler Discrete (fast, good quality)
+- **`euler_a`** - Euler Ancestral (more creative, adds randomness)
+- **`dpm`** - DPM++ Multistep (high quality, efficient)
+- **`ddim`** - DDIM (deterministic, stable)
+- **`pndm`** - PNDM (default, good balance)
+- **`lms`** - Linear Multistep (smooth results)
+- **`kdpm2`** - Karras DPM2 (high quality)
+- **`kdpm2_a`** - Karras DPM2 Ancestral (creative variant)
+
+Different schedulers can significantly affect generation speed and image characteristics. Experiment to find the best one for your use case!
+
 ## Tips for Best Results
 
 1. **Prompt Quality**: Be specific and descriptive
@@ -148,6 +203,9 @@ The network volume:
 3. **CFG Scale**: 3.5-5.0 works well for most prompts
 4. **Text Rendering**: Qwen-Image excels at rendering text - great for logos, signs, and calligraphy
 5. **Seed**: Use the same seed to reproduce images
+6. **Scheduler Selection**: Try `euler` or `dpm` for faster generation, `euler_a` for more creative results
+7. **LoRA Usage**: Include `lora_url` to use any compatible LoRA (cached automatically)
+8. **LoRA Tuning**: Reduce `lora_scale` (0.5-0.7) if the LoRA effect is too strong
 
 ## License
 
