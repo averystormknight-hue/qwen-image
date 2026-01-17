@@ -2,14 +2,13 @@
   "tests": [
     {
       "name": "healthcheck",
-      "timeout": 120,
+      "timeout": 300,
       "input": {
-        "test_mode": true,
-        "prompt": "health",
+        "prompt": "healthcheck",
         "width": 256,
         "height": 256,
-        "num_inference_steps": 1,
-        "true_cfg_scale": 1.0
+        "num_inference_steps": 8,
+        "true_cfg_scale": 2.0
       }
     }
   ]
