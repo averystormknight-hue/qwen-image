@@ -2,6 +2,9 @@
 RunPod Serverless Handler for Qwen-Image
 """
 import runpod
+
+# Startup marker for build/test visibility
+print("[Qwen-Image] handler imported and ready")
 from diffusers import (
     DiffusionPipeline,
     EulerDiscreteScheduler,
