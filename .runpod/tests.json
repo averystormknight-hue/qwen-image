@@ -8,8 +8,14 @@
         "width": 256,
         "height": 256,
         "num_inference_steps": 8,
-        "true_cfg_scale": 2.0
+        "true_cfg_scale": 2.0,
+        "test_mode": true
       }
     }
-  ]
+  ],
+  "config": {
+    "env": [
+      {"key": "NOVA_SKIP_MODEL_DOWNLOAD", "value": "1"}
+    ]
+  }
 }
