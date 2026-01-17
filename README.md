@@ -5,7 +5,7 @@ A production-ready RunPod serverless endpoint for Alibaba's Qwen-Image model - a
 
 ## Features
 
-- **Official Qwen-Image Model** - 20B MMDiT image foundation model
+- **Official Qwen-Image Model** - 20B MMDiT image foundation model 
 - **GPU Optimized** - Runs on A100 80GB, H100 PCIe, H100 HBM3, H100 NVL, and high-end workstation GPUs
 - **Auto-scaling** - Scales to 0 when idle to save costs
 - **Network Volume Storage** - Model cached persistently across all workers
