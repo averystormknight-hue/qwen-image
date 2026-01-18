@@ -11,7 +11,7 @@ A production-ready RunPod serverless endpoint for Alibaba's Qwen-Image model - a
 - **Network Volume Storage** - Model cached persistently across all workers
 - **Fast Cold Starts** - Optimized Docker image with pre-installed dependencies
 
-## Model Specifications
+## Model Specifications 
 
 - **Model**: `Qwen/Qwen-Image` (20B parameters)
 - **Recommended VRAM**: 80GB (A100/H100 recommended)
