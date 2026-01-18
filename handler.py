@@ -90,6 +90,10 @@ def generate_image(job):
     """
     job_input = job["input"]
 
+    if job_input.get("test_mode"):
+        print("[Qwen-Image] test_mode short-circuit")
+        return {"status": "ok"}
+
     prompt = job_input.get("prompt")
     if not prompt:
         return {"error": "prompt is required"}
