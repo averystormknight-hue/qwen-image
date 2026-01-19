@@ -77,6 +77,18 @@ def load_model():
     pipeline = DiffusionPipeline.from_pretrained(model_name, torch_dtype=torch_dtype)
     pipeline = pipeline.to(device)
 
+    # Some schedulers in current diffusers lack newer kwargs (mu/sigmas) that Qwen-Image passes.
+    # Wrap set_timesteps to drop unknown kwargs so we stay forward-compatible with pipeline calls.
+    if hasattr(pipeline, "scheduler") and hasattr(pipeline.scheduler, "set_timesteps"):
+        original_set_timesteps = pipeline.scheduler.set_timesteps
+
+        def _safe_set_timesteps(*args, **kwargs):
+            kwargs.pop("mu", None)
+            kwargs.pop("sigmas", None)
+            return original_set_timesteps(*args, **kwargs)
+
+        pipeline.scheduler.set_timesteps = _safe_set_timesteps
+
     print(f"✅ Model loaded on {device}")
     print(f"📊 GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'N/A'}")
 
