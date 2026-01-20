@@ -66,6 +66,15 @@ SCHEDULERS = {
     "kdpm2_a": KDPM2AncestralDiscreteScheduler,
 }
 
+def make_safe_set_timesteps(original_method):
+    def safe_set_timesteps(self, *args, **kwargs):
+        import inspect
+        sig = inspect.signature(original_method)
+        # Filter kwargs
+        clean_kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
+        return original_method(self, *args, **clean_kwargs)
+    return safe_set_timesteps
+
 def patch_schedulers():
     """
     Globally patch schedulers' set_timesteps to ignore unknown kwargs.
@@ -74,15 +83,6 @@ def patch_schedulers():
     """
     print("🩹 Patching schedulers for compatibility...")
     
-    def make_safe_set_timesteps(original_method):
-        def safe_set_timesteps(self, *args, **kwargs):
-            import inspect
-            sig = inspect.signature(original_method)
-            # Filter kwargs
-            clean_kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
-            return original_method(self, *args, **clean_kwargs)
-        return safe_set_timesteps
-
     # Patch all known schedulers
     for name, cls in SCHEDULERS.items():
         try:
@@ -99,15 +99,18 @@ def patch_schedulers():
         except Exception as e:
             print(f"  - ⚠️ Skipping patch for {name}: {e}")
             
-    # Also patch FlowMatchEulerDiscreteScheduler specifically since it's the default
-    from diffusers.schedulers import FlowMatchEulerDiscreteScheduler
-    if hasattr(FlowMatchEulerDiscreteScheduler, "set_timesteps"):
-        original = FlowMatchEulerDiscreteScheduler.set_timesteps
-        if not getattr(original, "__is_patched__", False):
-            patched = make_safe_set_timesteps(original)
-            patched.__is_patched__ = True
-            FlowMatchEulerDiscreteScheduler.set_timesteps = patched
-            print(f"  - Patched FlowMatchEulerDiscreteScheduler")
+    # Also patch FlowMatchEulerDiscreteScheduler specifically
+    try:
+        from diffusers.schedulers import FlowMatchEulerDiscreteScheduler
+        if hasattr(FlowMatchEulerDiscreteScheduler, "set_timesteps"):
+            original = FlowMatchEulerDiscreteScheduler.set_timesteps
+            if not getattr(original, "__is_patched__", False):
+                patched = make_safe_set_timesteps(original)
+                patched.__is_patched__ = True
+                FlowMatchEulerDiscreteScheduler.set_timesteps = patched
+                print(f"  - Patched FlowMatchEulerDiscreteScheduler")
+    except Exception as e:
+        print(f"  - ⚠️ Failed to patch FlowMatchEulerDiscreteScheduler: {e}")
 
 def load_model():
     """Load model once during cold start"""
@@ -117,7 +120,7 @@ def load_model():
 
     print("🚀 Loading Qwen-Image model...")
     
-    # Apply patches before loading
+    # Apply class-level patches before loading
     patch_schedulers()
 
     model_name = "Qwen/Qwen-Image"
@@ -126,6 +129,31 @@ def load_model():
 
     pipeline = DiffusionPipeline.from_pretrained(model_name, torch_dtype=torch_dtype)
     pipeline = pipeline.to(device)
+    
+    # Apply instance-level patch just in case
+    if hasattr(pipeline, "scheduler") and hasattr(pipeline.scheduler, "set_timesteps"):
+        original = pipeline.scheduler.set_timesteps
+        # We need to bind the method to the instance manually if we replace it on the instance
+        # Actually, Python methods on instances are bound methods.
+        # We can just replace the method on the instance with a new bound method or partial.
+        # But patching the class should have worked.
+        # Let's try replacing it on the instance with a wrapped function.
+        
+        # Check if already patched (via class)
+        if not getattr(original, "__is_patched__", False):
+            print("  - Applying instance-level scheduler patch...")
+            # We can't easily get the 'unbound' original if it's already bound.
+            # But we can wrap the bound method.
+            
+            bound_original = original
+            
+            def instance_safe_set_timesteps(*args, **kwargs):
+                import inspect
+                sig = inspect.signature(bound_original)
+                clean_kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
+                return bound_original(*args, **clean_kwargs)
+            
+            pipeline.scheduler.set_timesteps = instance_safe_set_timesteps
 
     print(f"✅ Model loaded on {device}")
     print(f"📊 GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'N/A'}")
