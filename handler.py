@@ -25,6 +25,10 @@ import urllib.request
 import hashlib
 from typing import Optional
 
+# Local cache for downloaded LoRAs
+LORA_CACHE_DIR = "/root/.cache/loras"
+os.makedirs(LORA_CACHE_DIR, exist_ok=True)
+
 # Global model instance (loaded once on cold start)
 pipeline = None
 
@@ -124,10 +128,20 @@ def generate_image(job):
     # Load model if not already loaded
     pipe = load_model()
     
-    # LoRA disabled: QwenImagePipeline currently can’t consume PEFT LoRAs here.
-    # If provided, we log and continue without applying.
-    if job_input.get("lora_url"):
-        print("⚠️ LoRA requested but not applied (PEFT/cross_attention unsupported). Continuing without LoRA.")
+    # LoRA loading
+    lora_url = job_input.get("lora_url")
+    if lora_url:
+        print(f"🔗 LoRA URL provided: {lora_url}")
+        lora_path = download_lora(lora_url)
+        if lora_path:
+            try:
+                print(f"⚡ Loading LoRA weights from {lora_path}...")
+                pipe.load_lora_weights(lora_path)
+                print("✅ LoRA loaded successfully")
+            except Exception as e:
+                print(f"❌ Failed to load LoRA weights: {e}")
+    else:
+        print("ℹ️ No LoRA URL provided")
 
     # Set scheduler if specified
     if scheduler_name and scheduler_name.lower() in SCHEDULERS:

@@ -25,11 +25,10 @@ RUN python3 -m pip cache purge
 # Copy handler
 COPY handler.py /workspace/handler.py
 
-# Point HuggingFace cache to network volume (persistent 100GB storage)
-# Model downloads ONCE to volume, then ALL workers share it
-ENV HF_HOME=/runpod-volume
-ENV TRANSFORMERS_CACHE=/runpod-volume
-ENV HF_HUB_CACHE=/runpod-volume
+# Point HuggingFace cache to local container storage (ephemeral, no volume needed)
+ENV HF_HOME=/root/.cache/huggingface
+ENV TRANSFORMERS_CACHE=/root/.cache/huggingface
+ENV HF_HUB_CACHE=/root/.cache/huggingface
 
 # RunPod will execute this
 CMD ["python3", "-u", "handler.py"]
