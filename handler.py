@@ -85,16 +85,19 @@ def patch_schedulers():
 
     # Patch all known schedulers
     for name, cls in SCHEDULERS.items():
-        if hasattr(cls, "set_timesteps"):
-            original = cls.set_timesteps
-            # Check if already patched to avoid recursion
-            if getattr(original, "__is_patched__", False):
-                continue
-            
-            patched = make_safe_set_timesteps(original)
-            patched.__is_patched__ = True
-            cls.set_timesteps = patched
-            print(f"  - Patched {name} ({cls.__name__})")
+        try:
+            if hasattr(cls, "set_timesteps"):
+                original = cls.set_timesteps
+                # Check if already patched to avoid recursion
+                if getattr(original, "__is_patched__", False):
+                    continue
+                
+                patched = make_safe_set_timesteps(original)
+                patched.__is_patched__ = True
+                cls.set_timesteps = patched
+                print(f"  - Patched {name} ({cls.__name__})")
+        except Exception as e:
+            print(f"  - ⚠️ Skipping patch for {name}: {e}")
             
     # Also patch FlowMatchEulerDiscreteScheduler specifically since it's the default
     from diffusers.schedulers import FlowMatchEulerDiscreteScheduler

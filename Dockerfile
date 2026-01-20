@@ -13,7 +13,7 @@ RUN python3 -m pip install --upgrade pip
 
 RUN python3 -m pip install git+https://github.com/huggingface/diffusers
 RUN python3 -m pip install transformers accelerate safetensors
-RUN python3 -m pip install peft
+RUN python3 -m pip install peft scipy
 RUN python3 -m pip install hf-transfer
 
 RUN python3 -m pip install pillow
