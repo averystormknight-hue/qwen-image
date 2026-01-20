@@ -81,16 +81,31 @@ def load_model():
     pipeline = DiffusionPipeline.from_pretrained(model_name, torch_dtype=torch_dtype)
     pipeline = pipeline.to(device)
 
-    # Some schedulers in current diffusers lack newer kwargs (mu/sigmas) that Qwen-Image passes.
     # Wrap set_timesteps to drop unknown kwargs so we stay forward-compatible with pipeline calls.
+    # This is critical for Qwen-Image which passes 'mu' and 'sigmas' that some schedulers reject.
     if hasattr(pipeline, "scheduler") and hasattr(pipeline.scheduler, "set_timesteps"):
         original_set_timesteps = pipeline.scheduler.set_timesteps
 
         def _safe_set_timesteps(*args, **kwargs):
-            kwargs.pop("mu", None)
-            kwargs.pop("sigmas", None)
-            return original_set_timesteps(*args, **kwargs)
+            # Inspect the original method signature
+            import inspect
+            sig = inspect.signature(original_set_timesteps)
+            bound = sig.bind_partial(*args, **kwargs)
+            
+            # Remove keys that are not in the signature
+            clean_kwargs = {}
+            for k, v in kwargs.items():
+                if k in sig.parameters:
+                    clean_kwargs[k] = v
+            
+            # If arguments are positional, we just pass them.
+            # But retrieve_timesteps usually calls it as set_timesteps(num_inference_steps, device=..., sigmas=...)
+            # We need to filter the kwargs aggressively.
+            
+            return original_set_timesteps(*args, **clean_kwargs)
 
+        # Apply the patch to the INSTANCE method
+        # We need to bind it correctly or just replace it on the instance
         pipeline.scheduler.set_timesteps = _safe_set_timesteps
 
     print(f"✅ Model loaded on {device}")
