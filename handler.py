@@ -66,6 +66,46 @@ SCHEDULERS = {
     "kdpm2_a": KDPM2AncestralDiscreteScheduler,
 }
 
+def patch_schedulers():
+    """
+    Globally patch schedulers' set_timesteps to ignore unknown kwargs.
+    This is necessary because QwenImagePipeline passes 'mu' and 'sigmas'
+    which standard diffusers schedulers reject.
+    """
+    print("🩹 Patching schedulers for compatibility...")
+    
+    def make_safe_set_timesteps(original_method):
+        def safe_set_timesteps(self, *args, **kwargs):
+            import inspect
+            sig = inspect.signature(original_method)
+            # Filter kwargs
+            clean_kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
+            return original_method(self, *args, **clean_kwargs)
+        return safe_set_timesteps
+
+    # Patch all known schedulers
+    for name, cls in SCHEDULERS.items():
+        if hasattr(cls, "set_timesteps"):
+            original = cls.set_timesteps
+            # Check if already patched to avoid recursion
+            if getattr(original, "__is_patched__", False):
+                continue
+            
+            patched = make_safe_set_timesteps(original)
+            patched.__is_patched__ = True
+            cls.set_timesteps = patched
+            print(f"  - Patched {name} ({cls.__name__})")
+            
+    # Also patch FlowMatchEulerDiscreteScheduler specifically since it's the default
+    from diffusers.schedulers import FlowMatchEulerDiscreteScheduler
+    if hasattr(FlowMatchEulerDiscreteScheduler, "set_timesteps"):
+        original = FlowMatchEulerDiscreteScheduler.set_timesteps
+        if not getattr(original, "__is_patched__", False):
+            patched = make_safe_set_timesteps(original)
+            patched.__is_patched__ = True
+            FlowMatchEulerDiscreteScheduler.set_timesteps = patched
+            print(f"  - Patched FlowMatchEulerDiscreteScheduler")
+
 def load_model():
     """Load model once during cold start"""
     global pipeline
@@ -73,6 +113,9 @@ def load_model():
         return pipeline
 
     print("🚀 Loading Qwen-Image model...")
+    
+    # Apply patches before loading
+    patch_schedulers()
 
     model_name = "Qwen/Qwen-Image"
     torch_dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
@@ -80,33 +123,6 @@ def load_model():
 
     pipeline = DiffusionPipeline.from_pretrained(model_name, torch_dtype=torch_dtype)
     pipeline = pipeline.to(device)
-
-    # Wrap set_timesteps to drop unknown kwargs so we stay forward-compatible with pipeline calls.
-    # This is critical for Qwen-Image which passes 'mu' and 'sigmas' that some schedulers reject.
-    if hasattr(pipeline, "scheduler") and hasattr(pipeline.scheduler, "set_timesteps"):
-        original_set_timesteps = pipeline.scheduler.set_timesteps
-
-        def _safe_set_timesteps(*args, **kwargs):
-            # Inspect the original method signature
-            import inspect
-            sig = inspect.signature(original_set_timesteps)
-            bound = sig.bind_partial(*args, **kwargs)
-            
-            # Remove keys that are not in the signature
-            clean_kwargs = {}
-            for k, v in kwargs.items():
-                if k in sig.parameters:
-                    clean_kwargs[k] = v
-            
-            # If arguments are positional, we just pass them.
-            # But retrieve_timesteps usually calls it as set_timesteps(num_inference_steps, device=..., sigmas=...)
-            # We need to filter the kwargs aggressively.
-            
-            return original_set_timesteps(*args, **clean_kwargs)
-
-        # Apply the patch to the INSTANCE method
-        # We need to bind it correctly or just replace it on the instance
-        pipeline.scheduler.set_timesteps = _safe_set_timesteps
 
     print(f"✅ Model loaded on {device}")
     print(f"📊 GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'N/A'}")
