@@ -73,6 +73,25 @@ def make_safe_set_timesteps(original_method):
         # Filter kwargs
         clean_kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
         return original_method(self, *args, **clean_kwargs)
+    
+    # Fake the signature to allow 'sigmas' and 'mu' so retrieve_timesteps doesn't raise ValueError
+    import inspect
+    from inspect import Parameter
+    
+    try:
+        sig = inspect.signature(original_method)
+        params = list(sig.parameters.values())
+        
+        # Add 'sigmas' and 'mu' if missing
+        if "sigmas" not in sig.parameters:
+            params.append(Parameter("sigmas", Parameter.KEYWORD_ONLY, default=None))
+        if "mu" not in sig.parameters:
+            params.append(Parameter("mu", Parameter.KEYWORD_ONLY, default=None))
+            
+        safe_set_timesteps.__signature__ = sig.replace(parameters=params)
+    except Exception as e:
+        print(f"⚠️ Failed to spoof signature: {e}")
+
     return safe_set_timesteps
 
 def patch_schedulers():
